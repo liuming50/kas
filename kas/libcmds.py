@@ -29,7 +29,8 @@ import shutil
 import os
 import pprint
 from .libkas import (ssh_cleanup_agent, ssh_setup_agent, ssh_no_host_key_check,
-                     get_build_environ, repos_fetch, repos_apply_patches)
+                     get_build_environ, repos_fetch, repos_apply_patches,
+                     repos_create_links)
 from .includehandler import IncludeException
 
 __license__ = 'MIT'
@@ -59,6 +60,7 @@ class Macro:
                 repo_loop,
                 FinishSetupRepos(),
                 ReposApplyPatches(),
+                ReposCreateLinks(),
                 SetupEnviron(),
                 WriteBBConfig(),
             ]
@@ -326,6 +328,17 @@ class ReposApplyPatches(Command):
 
     def execute(self, ctx):
         repos_apply_patches(ctx.config.get_repos())
+
+class ReposCreateLinks(Command):
+    """
+       Create links defined in the configuration to the repositories.
+    """
+
+    def __str__(self):
+        return 'repos_create_links'
+
+    def execute(self, ctx):
+        repos_create_links(ctx.config.get_repos())
 
 
 class ReposCheckout(Command):

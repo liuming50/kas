@@ -221,6 +221,24 @@ def repos_apply_patches(repos):
         raise TaskExecError('apply patches', e.ret_code)
 
 
+def repos_create_links(repos):
+    """
+        Create links to the repositories.
+    """
+    if len(repos) == 0:
+        return
+
+    tasks = []
+    for repo in repos:
+        tasks.append(asyncio.ensure_future(repo.create_links_async()))
+
+    loop = asyncio.get_event_loop()
+    try:
+        loop.run_until_complete(asyncio.gather(*tasks))
+    except CommandExecError as e:
+        raise TaskExecError('create links', e.ret_code)
+
+
 def get_build_environ(build_system):
     """
         Creates the build environment variables.

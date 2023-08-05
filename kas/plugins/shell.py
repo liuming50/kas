@@ -92,6 +92,7 @@ class Shell:
                 'setup_dir',
                 'finish_setup_repos',
                 'repos_apply_patches',
+                'repos_create_links',
                 'write_bbconfig',
             ]
 

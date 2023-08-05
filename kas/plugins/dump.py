@@ -176,6 +176,7 @@ class Dump(Checkout):
         args.skip += [
             'setup_dir',
             'repos_apply_patches',
+            'repos_create_links',
             'setup_environ',
             'write_bbconfig',
         ]

@@ -26,6 +26,7 @@
 import re
 import os
 import sys
+import errno
 import logging
 from urllib.parse import urlparse
 from tempfile import TemporaryDirectory
@@ -71,13 +72,26 @@ class PatchApplyError(KasUserError):
     """
 
 
+class LinkMappingError(KasUserError):
+    """
+    The requested link can not be related to a repo
+    """
+    pass
+
+
+class LinkCreationError(KasUserError):
+    """
+    The required link could not be created
+    """
+
+
 class Repo:
     """
         Represents a repository in the kas configuration.
     """
 
     def __init__(self, name, url, path, commit, branch, refspec, layers,
-                 patches, disable_operations):
+                 patches, links, disable_operations):
         self.name = name
         self.url = url
         self.path = path
@@ -86,6 +100,7 @@ class Repo:
         self.refspec = refspec
         self._layers = layers
         self._patches = patches
+        self._links = links
         self.operations_disabled = disable_operations
 
     def __getattr__(self, item):
@@ -164,6 +179,22 @@ class Repo:
 
             patches.append(this_patch)
 
+        links_dict = repo_config.get('links', {})
+        links = []
+        for l in sorted(links_dict):
+            if not links_dict[l]:
+                continue
+            this_link = {
+                'id': l,
+                'src': links_dict[l]['src'],
+                'dest': links_dict[l]['dest'],
+            }
+            if this_link['src'] is None or this_link['dest'] is None:
+                raise LinkMappingError(
+                    'No src or dest specified for link entry "{}"'.format(l))
+
+            links.append(this_link)
+
         url = repo_config.get('url', None)
         name = repo_config.get('name', name)
         typ = repo_config.get('type', 'git')
@@ -210,10 +241,10 @@ class Repo:
 
         if typ == 'git':
             return GitRepo(name, url, path, commit, branch, refspec, layers,
-                           patches, disable_operations)
+                           patches, links, disable_operations)
         if typ == 'hg':
             return MercurialRepo(name, url, path, commit, branch, refspec,
-                                 layers, patches, disable_operations)
+                                 layers, patches, links, disable_operations)
         raise UnsupportedRepoTypeError('Repo type "%s" not supported.' % typ)
 
     @staticmethod
@@ -432,6 +463,36 @@ class RepoImpl(Repo):
 
         return 0
 
+    async def create_links_async(self):
+        """
+            Create links to a repository asynchronously.
+        """
+        if self.operations_disabled or not self._links:
+            return 0
+
+        for link in self._links:
+            src = os.path.join(self.path, link['src'])
+            dest = link['dest']
+
+            if not os.path.exists(src):
+                raise PatchApplyError(
+                    'Could not create link, src does not exist. repo: {}, src: {})'
+                    .format(self.name, src))
+
+            os.makedirs(os.path.dirname(os.path.abspath(dest)), exist_ok=True)
+
+            try:
+                os.symlink(src, dest)
+            except OSError as e:
+                if e.errno != errno.EEXIST or os.readlink(dest) != src:
+                    raise PatchApplyError(
+                        'Could not create link. repo: {}, src: {}, dest {})'
+                        .format(self.name, src, dest))
+
+            logging.info('Link created. '
+                         '(src path: %s, dest path: %s)', src, dest)
+
+        return 0
 
 class GitRepo(RepoImpl):
     """
